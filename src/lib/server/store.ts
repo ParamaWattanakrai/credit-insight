@@ -12,7 +12,7 @@
 //   4. If the xlsx is edited outside the app (e.g. opened and saved in Excel), the
 //      store notices the newer modification time and reloads it.
 //
-// This is safe for a single server process (the normal `npm run dev` / `node build`).
+// This is safe for a single server process (`docker compose up`, `npm run dev` or `node build`).
 
 import ExcelJS from 'exceljs';
 import fs from 'node:fs';

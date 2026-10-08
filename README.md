@@ -14,7 +14,13 @@ The same file feeds a statistical-analysis dashboard, a downloadable Excel repor
 
 ## Quick start
 
-Requirements: **Node.js 20+** (tested on 22). Python 3 + pandas/openpyxl only if you want to regenerate the Excel analysis.
+**With Docker** (recommended — nothing else to install; details in the [Docker](#docker) section):
+
+```bash
+docker compose up -d --build      # → http://localhost:3000
+```
+
+**Without Docker** (for development): needs **Node.js 20+** (tested on 22). Python 3 + pandas/openpyxl only if you want to regenerate the Excel analysis.
 
 ```bash
 npm install
@@ -23,7 +29,7 @@ npm run dev            # http://localhost:5173
 
 The first load streams the 50k-row Excel file into memory (~3–4 s); after that everything is instant.
 
-Production:
+Production build without Docker:
 
 ```bash
 npm run build
@@ -41,7 +47,9 @@ Optional settings: copy `.env.example` to `.env`.
 | `SEED_FILE` | `data/seed/credit_card_customers_seed.xlsx` | Original Kaggle data, used by `npm run reset-data` |
 | `PUBLIC_TABLEAU_URL` | — | Default Tableau view shown to everyone on the Tableau page |
 
-Restore the original data: stop the server, then `npm run reset-data`.
+Restore the original data: stop the server, then
+- **Docker:** `docker compose down`, copy `data/seed/credit_card_customers_seed.xlsx` over `data/credit_card_customers.xlsx` (or delete the latter), then `docker compose up -d`. A missing data file is re-seeded automatically.
+- **Node:** `npm run reset-data`.
 
 ## Docker
 
@@ -71,7 +79,7 @@ statistical-analysis workbook to `./analysis`.
 | `UID` / `GID` | `1000` | **Linux only:** the container writes `./data` as this user. Set to `id -u` / `id -g` if yours differ. Docker Desktop on macOS/Windows doesn't need this |
 
 Notes
-- On first start with an empty `./data`, the container copies in the seed dataset automatically.
+- If `data/credit_card_customers.xlsx` is missing at start, the container copies in the seed dataset automatically.
 - On Windows, close the xlsx in Excel before editing in the app (Excel locks the file; the app keeps retrying the save).
 - `docker compose stop` waits up to 30 s so a save in progress can finish.
 

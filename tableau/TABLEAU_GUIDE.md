@@ -21,9 +21,17 @@ Either way the web app embeds the view the same way: paste the **Share** link on
 
 ## 1. Connect to the data
 
-1. Start the web app (`npm run dev`) and make sure your edits are saved (green dot, top right).
+1. Start the web app from the project folder and make sure your edits are saved (green dot, top right):
+
+   ```bash
+   docker compose up -d --build      # → http://localhost:3000
+   ```
+
+   (Without Docker: `npm install && npm run dev` → http://localhost:5173. The Excel file is the same either way.)
 2. In Tableau: **Connect → To a File → Microsoft Excel** and choose
-   `data/credit_card_customers.xlsx` (or download the latest copy from **Data → Download .xlsx** in the app).
+   `data/credit_card_customers.xlsx` **in the project folder on your computer**. Docker shares that folder with the
+   container, so it is the live database — Tableau doesn't need to talk to the container. (Or download the latest
+   copy from **Data → Download .xlsx** in the app.)
 3. Drag the **Customers** sheet onto the canvas.
 4. In the data grid, select the seven spending columns
    (`Online_Shopping_Spending`, `Grocery_Spending`, `Fuel_Spending`, `Dining_Spending`,
