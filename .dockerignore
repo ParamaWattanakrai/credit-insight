@@ -1,0 +1,13 @@
+node_modules
+build
+.svelte-kit
+.env
+.git
+data/credit_card_customers.xlsx
+data/backups
+data/*.tmp
+analysis
+tableau
+docker
+docker-compose.yml
+*.zip

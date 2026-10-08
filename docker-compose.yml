@@ -1,0 +1,41 @@
+# Credit Insight — docker compose
+#
+#   docker compose up -d --build        start the web app  → http://localhost:3000
+#   docker compose logs -f app          watch it load / save the Excel file
+#   docker compose down                 stop (pending edits are flushed to Excel first)
+#   docker compose run --rm report      regenerate analysis/credit_card_analysis.xlsx from the live data
+#
+# The Excel "database" is a file, so it is a bind-mounted folder rather than its own container:
+# ./data on your machine is the same folder the app writes to, so Excel and Tableau Desktop
+# can open data/credit_card_customers.xlsx directly.
+
+services:
+  app:
+    build: .
+    image: credit-insight:latest
+    container_name: credit-insight
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      # Must match the URL you open in the browser, or SvelteKit rejects form posts (CSRF check).
+      ORIGIN: ${ORIGIN:-http://localhost:3000}
+      PUBLIC_TABLEAU_URL: ${PUBLIC_TABLEAU_URL:-}
+    volumes:
+      - ./data:/app/data
+    # Linux hosts: the container writes as this uid/gid — match your own user (see README).
+    user: "${UID:-1000}:${GID:-1000}"
+    init: true                 # forwards Ctrl+C / docker stop to Node so it can flush edits
+    stop_grace_period: 30s     # time allowed to finish writing the Excel file on shutdown
+    restart: unless-stopped
+
+  # Optional one-shot job (not started by `up`): rebuilds the statistical-analysis workbook.
+  report:
+    build:
+      context: .
+      dockerfile: docker/report.Dockerfile
+    image: credit-insight-report:latest
+    profiles: ["tools"]
+    volumes:
+      - ./data:/work/data:ro
+      - ./analysis:/work/analysis
+    user: "${UID:-1000}:${GID:-1000}"
