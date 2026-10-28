@@ -6,9 +6,7 @@
 
 	const nav = [
 		{ href: '/', label: 'Dashboard' },
-		{ href: '/data', label: 'Data' },
-		{ href: '/analysis', label: 'Statistics' },
-		{ href: '/tableau', label: 'Tableau' }
+		{ href: '/data', label: 'Data' }
 	];
 
 	const active = (href: string) => (href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href));
