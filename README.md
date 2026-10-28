@@ -46,6 +46,7 @@ Optional settings: copy `.env.example` to `.env`.
 | `DATA_FILE` | `data/credit_card_customers.xlsx` | The Excel database |
 | `SEED_FILE` | `data/seed/credit_card_customers_seed.xlsx` | Original Kaggle data, used by `npm run reset-data` |
 | `PUBLIC_TABLEAU_URL` | — | Default Tableau view shown to everyone on the Tableau page |
+| `TABLEAU_SERVER_URL`, `TABLEAU_CLIENT_ID`, `TABLEAU_SECRET_ID`, `TABLEAU_SECRET_VALUE`, `TABLEAU_USER` | — | Tableau Cloud **Connected App** (JWT): lets visitors see embedded views with no Tableau account. Server-side secrets — keep in `.env` only |
 
 Restore the original data: stop the server, then
 - **Docker:** `docker compose down`, copy `data/seed/credit_card_customers_seed.xlsx` over `data/credit_card_customers.xlsx` (or delete the latter), then `docker compose up -d`. A missing data file is re-seeded automatically.

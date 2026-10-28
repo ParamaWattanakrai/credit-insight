@@ -20,6 +20,11 @@ services:
       # Must match the URL you open in the browser, or SvelteKit rejects form posts (CSRF check).
       ORIGIN: ${ORIGIN:-http://localhost:3000}
       PUBLIC_TABLEAU_URL: ${PUBLIC_TABLEAU_URL:-}
+      TABLEAU_SERVER_URL: ${TABLEAU_SERVER_URL:-}
+      TABLEAU_CLIENT_ID: ${TABLEAU_CLIENT_ID:-}
+      TABLEAU_SECRET_ID: ${TABLEAU_SECRET_ID:-}
+      TABLEAU_SECRET_VALUE: ${TABLEAU_SECRET_VALUE:-}
+      TABLEAU_USER: ${TABLEAU_USER:-}
     volumes:
       - ./data:/app/data
     # Linux hosts: the container writes as this uid/gid — match your own user (see README).

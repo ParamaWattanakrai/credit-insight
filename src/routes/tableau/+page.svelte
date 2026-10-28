@@ -20,6 +20,11 @@
 	let reloadKey = $state(0);
 	let scriptReady = $state(false);
 	let scriptError = $state('');
+	// Connected-App JWT: fetched from our server for views hosted on the configured Tableau site.
+	let token = $state('');
+	let tokenReady = $state(false);
+	let tokenError = $state('');
+	let tokenSeq = 0;
 
 	const view = $derived(views[current]);
 
@@ -71,6 +76,24 @@
 		document.head.appendChild(el);
 	}
 
+	/** Ask our server for a fresh JWT when this view lives on the Tableau site the Connected App belongs to. */
+	async function loadToken(url: string) {
+		const seq = ++tokenSeq;
+		tokenReady = false;
+		tokenError = '';
+		token = '';
+		try {
+			const res = await fetch('/api/tableau/token', { cache: 'no-store' });
+			const info = await res.json();
+			if (seq !== tokenSeq) return;
+			if (info.enabled && new URL(url).origin === info.origin) token = info.token;
+		} catch {
+			if (seq !== tokenSeq) return;
+			tokenError = 'Couldn’t get an access token from the server — showing the view with normal Tableau login.';
+		}
+		if (seq === tokenSeq) tokenReady = true;
+	}
+
 	function persist() {
 		try {
 			localStorage.setItem(STORAGE_KEY, JSON.stringify(views));
@@ -111,6 +134,12 @@
 
 	$effect(() => {
 		if (view) ensureScript(view.url);
+	});
+
+	// A token is single-use, so fetch a new one whenever the view changes or is reloaded.
+	$effect(() => {
+		reloadKey;
+		if (view) loadToken(view.url);
 	});
 </script>
 
@@ -154,11 +183,16 @@
 	<div class="card viz">
 		{#if scriptError}
 			<p class="err">{scriptError}</p>
-		{:else if !scriptReady}
+		{:else if !scriptReady || !tokenReady}
 			<p class="muted loading">Loading Tableau…</p>
 		{:else}
+			{#if tokenError}<p class="err">{tokenError}</p>{/if}
 			{#key `${view.url}#${reloadKey}`}
-				<tableau-viz src={view.url} toolbar="bottom" width="100%" height="820" device="default"></tableau-viz>
+				{#if token}
+					<tableau-viz src={view.url} {token} toolbar="bottom" width="100%" height="820" device="default"></tableau-viz>
+				{:else}
+					<tableau-viz src={view.url} toolbar="bottom" width="100%" height="820" device="default"></tableau-viz>
+				{/if}
 			{/key}
 		{/if}
 	</div>
