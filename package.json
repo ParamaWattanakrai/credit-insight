@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "description": "Credit card customer behaviour — CRUD on Excel, statistical analysis and Tableau dashboards (SvelteKit)",
   "scripts": {
     "dev": "vite dev",
