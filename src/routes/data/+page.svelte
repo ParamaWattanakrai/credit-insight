@@ -2,23 +2,20 @@
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { CARD_TYPES, OCCUPATIONS, formatValue } from '$lib/schema';
+	import { CARD_TYPES, OCCUPATIONS, COLUMNS, formatValue } from '$lib/schema';
 
 	let { data, form } = $props();
 
-	const cols = [
-		{ key: 'Customer_ID', label: 'ID' },
-		{ key: 'Age', label: 'Age', r: true },
-		{ key: 'Gender', label: 'Sex' },
-		{ key: 'Occupation', label: 'Occupation' },
-		{ key: 'Card_Type', label: 'Card' },
-		{ key: 'Annual_Income', label: 'Income', r: true },
-		{ key: 'Credit_Limit', label: 'Limit', r: true },
-		{ key: 'Monthly_Spending', label: 'Spend / mo', r: true },
-		{ key: 'Credit_Utilization', label: 'Util.', r: true },
-		{ key: 'Payment_Ratio', label: 'Pay ratio', r: true },
-		{ key: 'Credit_Score', label: 'Score', r: true }
-	];
+	const GROUP_ORDER = ['Profile', 'Card', 'Spending', 'Balance & Payments', 'Engagement'] as const;
+	// Customer_ID is shown separately as a frozen leading column, not grouped.
+	const groups = GROUP_ORDER.map((name) => ({
+		name,
+		cols: COLUMNS.filter((c) => c.group === name && c.type !== 'id')
+	}));
+	const idCol = COLUMNS.find((c) => c.type === 'id')!;
+
+	let collapsed = $state<Record<string, boolean>>({});
+	const toggleGroup = (g: string) => (collapsed = { ...collapsed, [g]: !collapsed[g] });
 
 	let search = $state('');
 	$effect.pre(() => {
@@ -60,6 +57,7 @@
 	);
 	const highlight = $derived(data.flash.created ?? data.flash.updated);
 	const filtered = $derived(!!(data.query.q || data.query.card || data.query.occupation || data.query.gender));
+	const totalCols = $derived(1 + groups.reduce((n, g) => n + (collapsed[g.name] ? 1 : g.cols.length), 0) + 1);
 </script>
 
 <svelte:head><title>Data · Credit Insight</title></svelte:head>
@@ -67,7 +65,6 @@
 <div class="page-head">
 	<div>
 		<h1>Customer data</h1>
-		<p>Every create, edit and delete here is written straight back to the Excel file — the same file Tableau reads.</p>
 	</div>
 	<div class="head-actions">
 		<a class="btn" href="/api/export/data.xlsx" data-sveltekit-reload>Download .xlsx</a>
@@ -106,35 +103,66 @@
 	</div>
 
 	<div class="table-wrap">
-		<table>
+		<table class="full">
 			<thead>
 				<tr>
-					{#each cols as c}
-						<th class:r={c.r}>
-							<a class="sort" href={sortHref(c.key)} data-sveltekit-noscroll>
-								{c.label}
-								{#if data.query.sort === c.key}<span aria-hidden="true">{data.query.dir === 'asc' ? '▲' : '▼'}</span>{/if}
-							</a>
+					<th rowspan="2" class="sticky-col">
+						<a class="sort" href={sortHref(idCol.key)} data-sveltekit-noscroll>
+							ID
+							{#if data.query.sort === idCol.key}<span aria-hidden="true">{data.query.dir === 'asc' ? '▲' : '▼'}</span>{/if}
+						</a>
+					</th>
+					{#each groups as g}
+						<th
+							class="group-head"
+							colspan={collapsed[g.name] ? 1 : g.cols.length}
+							rowspan={collapsed[g.name] ? 2 : 1}
+						>
+							<button type="button" class="group-toggle" onclick={() => toggleGroup(g.name)} title={collapsed[g.name] ? 'Expand' : 'Collapse'}>
+								<span class="chev">{collapsed[g.name] ? '▸' : '▾'}</span>
+								{g.name}
+							</button>
 						</th>
 					{/each}
-					<th class="r"><span class="sr">Actions</span></th>
+					<th rowspan="2" class="r sticky-actions"><span class="sr">Actions</span></th>
+				</tr>
+				<tr>
+					{#each groups as g}
+						{#if !collapsed[g.name]}
+							{#each g.cols as c}
+								<th class:r={c.type !== 'enum'}>
+									<a class="sort" href={sortHref(c.key)} data-sveltekit-noscroll>
+										{c.label}
+										{#if data.query.sort === c.key}<span aria-hidden="true">{data.query.dir === 'asc' ? '▲' : '▼'}</span>{/if}
+									</a>
+								</th>
+							{/each}
+						{/if}
+					{/each}
 				</tr>
 			</thead>
 			<tbody>
 				{#each data.rows as row (row.Customer_ID)}
 					<tr class:hl={row.Customer_ID === highlight}>
-						{#each cols as c}
-							<td class:r={c.r}>
-								{#if c.key === 'Customer_ID'}
-									<a href="/data/{row.Customer_ID}" class="mono">{row.Customer_ID}</a>
-								{:else if c.key === 'Card_Type'}
-									<span class="pill tier-{String(row.Card_Type).toLowerCase()}">{row.Card_Type}</span>
-								{:else}
-									{formatValue(c.key, row[c.key])}
-								{/if}
-							</td>
+						<td class="sticky-col">
+							<a href="/data/{row.Customer_ID}" class="mono">{row.Customer_ID}</a>
+						</td>
+						{#each groups as g}
+							{#if collapsed[g.name]}
+								<td class="collapsed-cell" title="{g.name} — click the header to expand">⋯</td>
+							{:else}
+								{#each g.cols as c}
+									<td class:r={c.type !== 'enum'}>
+										{#if c.key === 'Card_Type'}
+											<span class="pill tier-{String(row.Card_Type).toLowerCase()}">{row.Card_Type}</span>
+										{:else}
+											{formatValue(c.key, row[c.key])}
+										{/if}
+									</td>
+								{/each}
+							{/if}
 						{/each}
-						<td class="r"><div class="row-actions">
+						<td class="r sticky-actions"><div class="row-actions">
 							<a class="btn small" href="/data/{row.Customer_ID}">Edit</a>
 							<form
 								method="POST"
@@ -150,7 +178,7 @@
 						</div></td>
 					</tr>
 				{:else}
-					<tr><td colspan={cols.length + 1} class="empty">No customers match these filters.</td></tr>
+					<tr><td colspan={totalCols} class="empty">No customers match these filters.</td></tr>
 				{/each}
 			</tbody>
 		</table>
@@ -226,6 +254,84 @@
 	}
 	tr.hl {
 		background: var(--accent-soft);
+	}
+	.table-wrap {
+		/* Override the global bleed-to-card-edge trick: with a sticky column, the negative
+		   margin moves the scroll container's clip boundary past the card edge, which let
+		   off-screen column content paint outside the card on horizontal scroll. */
+		margin: 0;
+		padding: 0;
+		contain: paint;
+	}
+	table.full {
+		table-layout: auto;
+		border-collapse: separate;
+		border-spacing: 0;
+	}
+	table.full th,
+	table.full td {
+		border-bottom: 1px solid var(--grid);
+	}
+	.sticky-col {
+		position: sticky;
+		left: 0;
+		z-index: 3;
+		background: var(--surface);
+		box-shadow: 1px 0 0 var(--border);
+	}
+	tbody tr:hover .sticky-col {
+		background: var(--surface-2);
+	}
+	tr.hl .sticky-col {
+		background: var(--accent-soft);
+	}
+	thead .sticky-col {
+		z-index: 4;
+	}
+	.sticky-actions {
+		position: sticky;
+		right: 0;
+		z-index: 3;
+		background: var(--surface);
+		box-shadow: -1px 0 0 var(--border);
+	}
+	tbody tr:hover .sticky-actions {
+		background: var(--surface-2);
+	}
+	tr.hl .sticky-actions {
+		background: var(--accent-soft);
+	}
+	thead .sticky-actions {
+		z-index: 4;
+	}
+	.group-head {
+		text-align: left;
+		background: var(--surface-2);
+		border-bottom: 1px solid var(--border);
+	}
+	.group-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		border: 0;
+		background: none;
+		font: inherit;
+		font-weight: 600;
+		color: var(--ink-2);
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+		font-size: 0.78rem;
+		cursor: pointer;
+		padding: 0;
+	}
+	.chev {
+		color: var(--muted);
+		font-size: 0.7rem;
+	}
+	.collapsed-cell {
+		text-align: center;
+		color: var(--muted);
+		background: var(--surface-2);
 	}
 	.row-actions {
 		display: flex;

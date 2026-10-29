@@ -56,10 +56,6 @@
 	<main>
 		{@render children()}
 	</main>
-
-	<footer>
-		Data: synthetic credit-card customer behaviour dataset (Kaggle) · stored in Excel · built with SvelteKit
-	</footer>
 </div>
 
 <style>
@@ -146,13 +142,6 @@
 		max-width: 1280px;
 		margin: 0 auto;
 		padding: 28px 24px 48px;
-	}
-	footer {
-		text-align: center;
-		font-size: 0.78rem;
-		color: var(--muted);
-		padding: 18px;
-		border-top: 1px solid var(--border);
 	}
 	@media (max-width: 760px) {
 		.bar {

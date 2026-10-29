@@ -148,7 +148,6 @@
 <div class="page-head">
 	<div>
 		<h1>Tableau Dashboard</h1>
-		<p>Interactive Tableau views built from the same Excel file this app edits, embedded with the Tableau Embedding API v3.</p>
 	</div>
 	<div class="actions">
 		<a class="btn" href="/api/export/data.xlsx" data-sveltekit-reload>Download data for Tableau</a>
@@ -208,19 +207,6 @@
 		</ol>
 	</div>
 {/if}
-
-<section class="card how">
-	<h2>How data gets from this app to Tableau</h2>
-	<div class="flow">
-		<div><b>1. Edit</b><span>Create / update / delete on the Data page</span></div>
-		<i>→</i>
-		<div><b>2. Excel</b><span>Saved to <code>credit_card_customers.xlsx</code> within a few seconds</span></div>
-		<i>→</i>
-		<div><b>3. Refresh</b><span>Tableau Desktop: Data → Refresh. Tableau Public: re-publish. Cloud/Server: extract refresh</span></div>
-		<i>→</i>
-		<div><b>4. View</b><span>Click ↻ Reload view here</span></div>
-	</div>
-</section>
 
 <style>
 	.actions {
