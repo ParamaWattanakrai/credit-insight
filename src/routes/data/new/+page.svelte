@@ -9,7 +9,7 @@
 	<div>
 		<a href="/data" class="muted">← Data</a>
 		<h1>New customer</h1>
-		<p>A new Customer ID is assigned automatically. The row is appended to the Excel file as soon as you save.</p>
+		<p>A new Customer ID is assigned automatically.</p>
 	</div>
 </div>
 

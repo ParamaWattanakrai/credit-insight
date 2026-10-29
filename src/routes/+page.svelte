@@ -158,9 +158,9 @@
 {#if showAdd}
 	<form class="card add" onsubmit={addView}>
 		<h2>Add a Tableau view</h2>
-		<p class="sub">Paste the link from Tableau's <b>Share</b> button (or the embed code). Tableau Public, Tableau Cloud and Tableau Server all work.</p>
+		<p class="sub">Paste the link from Tableau's share button (or the embed code)</p>
 		<div class="add-row">
-			<input placeholder="Name (e.g. Spending overview)" bind:value={draftName} aria-label="View name" />
+			<input placeholder="Name" bind:value={draftName} aria-label="View name" />
 			<input class="url" placeholder="https://public.tableau.com/views/Workbook/Dashboard" bind:value={draftUrl} aria-label="View URL" required />
 			<button class="btn primary" type="submit">Add</button>
 		</div>
