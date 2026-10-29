@@ -291,9 +291,16 @@ export async function listCustomers(query: ListQuery) {
 	const sort = query.sort && COLUMN_MAP[query.sort] ? query.sort : null;
 	const dir = query.dir === 'asc' ? 1 : -1;
 	if (sort) {
-		const numeric = COLUMN_MAP[sort].type === 'int' || COLUMN_MAP[sort].type === 'float';
+		const col = COLUMN_MAP[sort];
+		const numeric = col.type === 'int' || col.type === 'float';
+		// Enum columns (e.g. Card_Type) sort by their defined tier/rank order, not alphabetically.
+		const rank = col.type === 'enum' && col.options ? (v: unknown) => col.options!.indexOf(String(v)) : null;
 		rows = rows.slice().sort((a, b) =>
-			numeric ? (Number(a[sort]) - Number(b[sort])) * dir : String(a[sort]).localeCompare(String(b[sort])) * dir
+			numeric
+				? (Number(a[sort]) - Number(b[sort])) * dir
+				: rank
+					? (rank(a[sort]) - rank(b[sort])) * dir
+					: String(a[sort]).localeCompare(String(b[sort])) * dir
 		);
 	} else {
 		rows = rows.slice().reverse();
