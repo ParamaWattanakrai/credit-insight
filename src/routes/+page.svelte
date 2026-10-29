@@ -298,36 +298,4 @@
 		padding: 1px 5px;
 		border-radius: 4px;
 	}
-	.how {
-		margin-top: 16px;
-	}
-	.flow {
-		display: flex;
-		align-items: stretch;
-		gap: 10px;
-		margin-top: 12px;
-		flex-wrap: wrap;
-	}
-	.flow div {
-		flex: 1 1 160px;
-		background: var(--surface-2);
-		border-radius: 8px;
-		padding: 10px 12px;
-		display: grid;
-		gap: 2px;
-		font-size: 0.85rem;
-	}
-	.flow span {
-		color: var(--ink-2);
-	}
-	.flow i {
-		align-self: center;
-		font-style: normal;
-		color: var(--muted);
-	}
-	@media (max-width: 760px) {
-		.flow i {
-			display: none;
-		}
-	}
 </style>
