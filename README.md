@@ -8,9 +8,9 @@ The same file feeds a statistical-analysis dashboard, a downloadable Excel repor
 
 | Requirement (โจทย์) | Where |
 |---|---|
-| **1. สร้างเว็บในการอัพเดตข้อมูลลง excel จากนั้น วิเคราะห์ข้อมูลตามชุดข้อมูลนั้นๆ**<br>Web app that updates data in Excel, then analyses it | **Data** page (`/data`): search, filter, sort, add / edit / delete customers → saved to `data/credit_card_customers.xlsx`.<br>**Dashboard** (`/`) and **Statistics** (`/analysis`) recompute from the Excel data after every change. |
+| **1. สร้างเว็บในการอัพเดตข้อมูลลง excel จากนั้น วิเคราะห์ข้อมูลตามชุดข้อมูลนั้นๆ**<br>Web app that updates data in Excel, then analyses it | **Data** page (`/data`): search, filter, sort, add / edit / delete customers → saved to `data/credit_card_customers.xlsx`. |
 | **2. สร้างไฟล์ excel และนำเสนอการวิเคราะห์ข้อมูลตามสถิติ**<br>Excel file presenting the statistical analysis | `analysis/credit_card_analysis.xlsx` — 11 sheets of **live Excel formulas**: descriptive stats, frequency distributions, group comparisons, correlation matrix, spending mix, ANOVA, χ² tests, regression, charts and key findings.<br>Plus **Download Excel report** in the app: the same analysis generated from the *current* data. |
-| **3. สร้างไฟล์จาก tableau และนำเสนอข้อมูลที่วิเคราะห์ไปในเว็บที่สร้างขึ้น**<br>Tableau file, presented inside the web app | **Tableau** page (`/tableau`) embeds published Tableau views with the Tableau Embedding API v3.<br>`tableau/TABLEAU_GUIDE.md` gives step-by-step instructions for the workbook (8 worksheets + dashboard). You build and publish it in Tableau, then paste the share link. |
+| **3. สร้างไฟล์จาก tableau และนำเสนอข้อมูลที่วิเคราะห์ไปในเว็บที่สร้างขึ้น**<br>Tableau file, presented inside the web app | **Dashboard** page (`/`) embeds published Tableau views with the Tableau Embedding API v3.<br>`tableau/TABLEAU_GUIDE.md` gives step-by-step instructions for the workbook (8 worksheets + dashboard). You build and publish it in Tableau, then paste the share link. |
 
 ## Quick start
 
@@ -88,10 +88,8 @@ Notes
 
 | Page | What it does |
 |---|---|
-| **Dashboard** `/` | KPI tiles, credit-score histogram, spending by card tier, category mix, occupation and score-band breakdowns, auto-generated findings |
+| **Dashboard** `/` | Embedded Tableau views (several, as tabs); paste a share link or embed code |
 | **Data** `/data` | Paginated table of all customers; search, filter by card/occupation/sex, sort any column; create, edit, delete with validation; download `.xlsx` / `.csv` |
-| **Statistics** `/analysis` | 1 Descriptive statistics for all 29 numeric variables · 2 Distributions · 3 Correlation heatmap + drivers of credit score · 4 Interactive group comparison · 5 Spending mix by tier · 6 Hypothesis tests (ANOVA, χ²) with effect sizes · 7 Regression scatter plots |
-| **Tableau** `/tableau` | Embedded Tableau views (several, as tabs); paste a share link or embed code |
 
 ## How the Excel "database" works
 
@@ -174,15 +172,13 @@ credit-insight/
     │   ├── server/store.ts               ← Excel-backed store (load, CRUD, safe saving)
     │   ├── server/stats.ts               ← statistics engine (cached per data version)
     │   ├── server/report.ts              ← Excel report from live data
-    │   └── components/                   ← CustomerForm + SVG charts (bar, histogram, heatmap, scatter, stacked)
+    │   └── components/                   ← CustomerForm
     └── routes/
-        ├── +page.svelte                  ← Dashboard
+        ├── +page.svelte                  ← Dashboard (Tableau embed, front page)
         ├── data/                         ← list, new, [id] edit
-        ├── analysis/                     ← Statistics
-        ├── tableau/                      ← Tableau embed
         └── api/                          ← REST + exports
 ```
 
 ## Tech
 
-SvelteKit 2 · Svelte 5 · TypeScript · ExcelJS · adapter-node · hand-built SVG charts (no chart library) · Tableau Embedding API v3. Light and dark mode follow the OS setting.
+SvelteKit 2 · Svelte 5 · TypeScript · ExcelJS · adapter-node · Tableau Embedding API v3. Light theme only.
