@@ -1,5 +1,3 @@
-// Builds a statistical-analysis workbook from the *live* data, so the Excel
-// report always reflects the latest CRUD edits made in the web app.
 
 import ExcelJS from 'exceljs';
 import { getAnalysis } from './stats';
@@ -51,7 +49,6 @@ export async function buildReport(): Promise<Buffer> {
 	wb.creator = 'Credit Insight';
 	wb.created = new Date();
 
-	// 1. Summary
 	{
 		const ws = wb.addWorksheet('Summary');
 		title(ws, 'Credit card customer behaviour — statistical summary', `Generated ${new Date().toLocaleString()} from ${a.n.toLocaleString()} live records`);
@@ -87,7 +84,6 @@ export async function buildReport(): Promise<Buffer> {
 		ws.getColumn(2).width = 18;
 	}
 
-	// 2. Descriptive statistics
 	{
 		const ws = wb.addWorksheet('Descriptive Stats', { views: [{ state: 'frozen', ySplit: 4, xSplit: 1 }] });
 		title(ws, 'Descriptive statistics', 'SD = sample standard deviation (STDEV.S); quartiles = QUARTILE.INC; skewness = SKEW');
@@ -102,7 +98,6 @@ export async function buildReport(): Promise<Buffer> {
 		for (let i = 2; i <= 12; i++) ws.getColumn(i).width = 14;
 	}
 
-	// 3–6. Group comparisons
 	const groupSheet = (name: string, heading: string, groups: typeof a.groups.byCard) => {
 		const ws = wb.addWorksheet(name);
 		title(ws, heading, 'Mean of each metric per group');
@@ -122,7 +117,6 @@ export async function buildReport(): Promise<Buffer> {
 	groupSheet('By Age Band', 'Comparison by age band', a.groups.byAge);
 	groupSheet('By Credit Score Band', 'Comparison by credit-score band (FICO-style)', a.groups.byScoreBand);
 
-	// 7. Correlation matrix with diverging colour scale
 	{
 		const ws = wb.addWorksheet('Correlation');
 		title(ws, 'Pearson correlation matrix', 'Blue = positive, red = negative; |r| > 0.5 strong, 0.3–0.5 moderate, < 0.3 weak');
@@ -153,7 +147,6 @@ export async function buildReport(): Promise<Buffer> {
 		table(ws, r0 + 1, ['Variable', 'r with Credit Score', 'Strength'], a.scoreCorrelations.map((c) => [c.label, c.r, Math.abs(c.r) > 0.5 ? 'Strong' : Math.abs(c.r) > 0.3 ? 'Moderate' : Math.abs(c.r) > 0.1 ? 'Weak' : 'Negligible']), [undefined, '0.000']);
 	}
 
-	// 8. Hypothesis tests & regression
 	{
 		const ws = wb.addWorksheet('Hypothesis Tests');
 		title(ws, 'Inferential statistics', 'α = 0.05. With n ≈ 50,000 almost any difference is "significant" — read the effect size (η², Cramér\'s V, R²).');
@@ -196,7 +189,6 @@ export async function buildReport(): Promise<Buffer> {
 		for (let i = 3; i <= 8; i++) ws.getColumn(i).width = 16;
 	}
 
-	// 9. Spending mix
 	{
 		const ws = wb.addWorksheet('Spending Mix');
 		title(ws, 'Spending mix by category', 'Average monthly per customer, and each category\'s share within card tiers');

@@ -1,6 +1,5 @@
 import { buildReport } from '$lib/server/report';
 
-// Statistical-analysis workbook generated from the current (live) data.
 export const GET = async () => {
 	const buf = await buildReport();
 	const stamp = new Date().toISOString().slice(0, 10);

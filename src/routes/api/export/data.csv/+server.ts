@@ -6,7 +6,6 @@ const esc = (v: unknown) => {
 	return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
-// CSV export of the current data (handy for Tableau Public, which can't refresh Excel extracts).
 export const GET = async () => {
 	const { rows } = await getStore();
 	const lines = [EXCEL_ORDER.join(',')];

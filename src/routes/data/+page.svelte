@@ -7,7 +7,6 @@
 	let { data, form } = $props();
 
 	const GROUP_ORDER = ['Profile', 'Card', 'Spending', 'Balance & Payments', 'Engagement'] as const;
-	// Customer_ID is shown separately as a frozen leading column, not grouped.
 	const groups = GROUP_ORDER.map((name) => ({
 		name,
 		cols: COLUMNS.filter((c) => c.group === name && c.type !== 'id')
@@ -256,9 +255,7 @@
 		background: var(--accent-soft);
 	}
 	.table-wrap {
-		/* Override the global bleed-to-card-edge trick: with a sticky column, the negative
-		   margin moves the scroll container's clip boundary past the card edge, which let
-		   off-screen column content paint outside the card on horizontal scroll. */
+		
 		margin: 0;
 		padding: 0;
 		contain: paint;

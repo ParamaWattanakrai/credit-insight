@@ -1,5 +1,3 @@
-// Column definitions for the credit-card customer dataset.
-// Shared by the server (validation, Excel I/O) and the client (forms, tables).
 
 export type ColumnType = 'id' | 'int' | 'float' | 'enum';
 
@@ -13,7 +11,6 @@ export interface Column {
 	step?: number;
 	options?: string[];
 	unit?: 'amt' | '%' | 'months' | 'pts' | '';
-	/** values stored as 0–1 ratios */
 	ratio?: boolean;
 }
 
@@ -65,7 +62,6 @@ export const COLUMNS: Column[] = [
 	{ key: 'Mobile_App_Login', label: 'Mobile app logins / month', type: 'int', group: 'Engagement', min: 0 }
 ];
 
-/** Order of columns in the Excel file (matches the Kaggle seed exactly). */
 export const EXCEL_ORDER = [
 	'Customer_ID', 'Age', 'Gender', 'Annual_Income', 'Occupation', 'Card_Type', 'Credit_Limit',
 	'Card_Age_Months', 'Monthly_Spending', 'Monthly_Transactions', 'Avg_Transaction_Value',
@@ -95,7 +91,6 @@ export interface ValidationResult {
 	errors: Record<string, string>;
 }
 
-/** Coerce + validate an untrusted input object (form data or JSON). */
 export function validateCustomer(input: Record<string, unknown>, opts: { partial?: boolean } = {}): ValidationResult {
 	const data: Customer = {};
 	const errors: Record<string, string> = {};

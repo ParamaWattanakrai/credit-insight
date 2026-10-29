@@ -1,5 +1,3 @@
-// Restore the Excel database from the original Kaggle seed file.
-// Usage: npm run reset-data   (stop the server first)
 import fs from 'node:fs';
 import path from 'node:path';
 

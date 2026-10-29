@@ -1,8 +1,6 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import { env } from '$env/dynamic/private';
 
-// Tableau Connected Apps (direct trust) — signs a short-lived JWT so visitors can see an embedded
-// view without having their own Tableau account. The secret never leaves the server.
 
 const b64url = (v: string | Buffer) => Buffer.from(v).toString('base64url');
 
@@ -20,7 +18,6 @@ export function tableauConfig() {
 	}
 }
 
-/** HS256 JWT in the format Tableau expects. Valid for 5 minutes (Tableau's maximum is 10). */
 export function signTableauToken(cfg: NonNullable<ReturnType<typeof tableauConfig>>): string {
 	const now = Math.floor(Date.now() / 1000);
 	const header = { alg: 'HS256', typ: 'JWT', kid: cfg.secretId, iss: cfg.clientId };

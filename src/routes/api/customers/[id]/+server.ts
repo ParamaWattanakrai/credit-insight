@@ -8,7 +8,6 @@ export const GET = async ({ params }) => {
 	return json(c);
 };
 
-// PUT replaces all fields; PATCH updates only the fields provided.
 async function update(id: string, request: Request, partial: boolean) {
 	const body = await request.json().catch(() => error(400, 'Body must be JSON'));
 	const { data, errors } = validateCustomer(body, { partial });

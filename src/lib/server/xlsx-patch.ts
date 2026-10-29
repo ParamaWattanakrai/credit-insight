@@ -1,18 +1,3 @@
-// Row-level patching of the data sheet inside an existing .xlsx.
-//
-// An .xlsx file is a zip of XML parts: one part per worksheet, plus charts, drawings,
-// tables, styles and so on. Libraries that load a workbook into objects and save it
-// again (ExcelJS included) drop the parts they don't model, such as charts. So this
-// module never re-creates the workbook. It opens the zip, edits the XML of the data
-// sheet only, and writes every other part back with the same content.
-//
-// Inside the data sheet:
-//   - rows that weren't edited keep their original XML;
-//   - edited rows are rewritten in place, keeping each cell's style;
-//   - new customers are appended at the bottom;
-//   - deleted customers are removed and the rows below move up one.
-// The Excel table on the sheet (e.g. "CustomerData") is resized to fit, so formulas
-// such as COUNTIFS(CustomerData[Age], ...) on other sheets pick up the change.
 
 import JSZip from 'jszip';
 import fsp from 'node:fs/promises';
@@ -54,7 +39,6 @@ function colNumber(letters: string) {
 	return n;
 }
 
-/** Resolve a path in a relationship target relative to the part that owns it. */
 function resolvePart(fromPart: string, target: string) {
 	if (target.startsWith('/')) return target.slice(1);
 	return path.posix.normalize(path.posix.join(path.posix.dirname(fromPart), target));
@@ -77,7 +61,6 @@ function parseSharedStrings(xml: string): string[] {
 	return out;
 }
 
-/** Split <sheetData> content into its <row> elements. */
 function splitRows(sheetData: string): string[] {
 	const rows: string[] = [];
 	let i = 0;
@@ -86,7 +69,7 @@ function splitRows(sheetData: string): string[] {
 		if (s === -1) break;
 		const openEnd = sheetData.indexOf('>', s);
 		if (sheetData[openEnd - 1] === '/') {
-			rows.push(sheetData.slice(s, openEnd + 1)); // empty row: <row .../>
+			rows.push(sheetData.slice(s, openEnd + 1));
 			i = openEnd + 1;
 		} else {
 			const e = sheetData.indexOf('</row>', openEnd) + '</row>'.length;
@@ -99,9 +82,9 @@ function splitRows(sheetData: string): string[] {
 
 interface Cell {
 	col: string;
-	attrs: string; // attributes of <c ...>
-	body: string; // inner XML ('' for <c .../>)
-	raw: string; // the whole <c> element as it appears in the file
+	attrs: string;
+	body: string;
+	raw: string;
 }
 
 function parseCells(rowXml: string): Cell[] {
@@ -130,7 +113,6 @@ function cellText(cell: Cell | undefined, sst: string[]): string | null {
 	return t === 's' ? (sst[Number(v)] ?? null) : decode(v);
 }
 
-/** Build one <c> element, keeping the style (s="…") of the cell it replaces. */
 function buildCell(ref: string, key: string, value: unknown, styleAttr: string) {
 	const col = COLUMN_MAP[key];
 	const s = styleAttr ? ` ${styleAttr}` : '';
@@ -141,11 +123,6 @@ function buildCell(ref: string, key: string, value: unknown, styleAttr: string) 
 	return `<c r="${ref}"${s} t="n"><v>${Number(value)}</v></c>`;
 }
 
-/**
- * Rewrite the row number in a row's own tag and in every cell reference inside it.
- * A formula in a moved row would still point at its old row, so any formula is
- * replaced by its last calculated value. (The app's own columns never hold formulas.)
- */
 function renumberRow(rowXml: string, newNum: number) {
 	return rowXml
 		.replace(/^<row\b([^>]*?)\br="\d+"/, `<row$1r="${newNum}"`)
@@ -160,17 +137,12 @@ interface DataSheet {
 	sheetPath: string;
 	sheetXml: string;
 	sst: string[];
-	sdOpen: number; // index of <sheetData
-	sdAfter: number; // index just past </sheetData> (or past <sheetData/>)
-	rowXmls: string[]; // header row first
-	colOf: Record<string, string>; // header name -> column letter
+	sdOpen: number;
+	sdAfter: number;
+	rowXmls: string[];
+	colOf: Record<string, string>;
 }
 
-/**
- * Open the workbook and locate the data sheet: the first sheet in workbook order.
- * Reads parts by name, so it doesn't matter in which order they are stored in the zip
- * (Excel and LibreOffice store them differently).
- */
 async function openDataSheet(file: string, columns: string[]): Promise<DataSheet> {
 	const zip = await JSZip.loadAsync(await fsp.readFile(file));
 	const read = async (p: string) => {
@@ -224,7 +196,6 @@ async function openDataSheet(file: string, columns: string[]): Promise<DataSheet
 	};
 }
 
-/** Read every customer row of the data sheet. IDs and categories become strings, the rest numbers. */
 export async function readDataSheet(file: string, columns: string[]): Promise<Customer[]> {
 	const { rowXmls, colOf, sst } = await openDataSheet(file, columns);
 	const wanted = new Map(columns.map((k) => [colOf[k], k]));
@@ -239,18 +210,13 @@ export async function readDataSheet(file: string, columns: string[]): Promise<Cu
 			if (col.type === 'id' || col.type === 'enum') rec[key] = (v ?? '').trim();
 			else rec[key] = v === null || v.trim() === '' ? 0 : Number(v);
 		}
-		if (!rec.Customer_ID) continue; // blank rows
+		if (!rec.Customer_ID) continue;
 		for (const key of columns) if (rec[key] === undefined) rec[key] = COLUMN_MAP[key].type === 'enum' ? '' : 0;
 		out.push(rec);
 	}
 	return out;
 }
 
-/**
- * Apply edits for the given customer IDs to the data sheet of `file`, writing the
- * result to `outFile`. `current` looks a customer up in the app's in-memory data:
- * an ID that's found is written (updated, or appended if new), one that isn't is deleted.
- */
 export async function patchDataSheet(
 	file: string,
 	outFile: string,
@@ -268,12 +234,10 @@ export async function patchDataSheet(
 	const rowIndex = new Map<string, number>();
 	rows.forEach((r, i) => r.id && rowIndex.set(r.id, i));
 
-	// Style template for appended rows: the last existing data row, if there is one.
 	const template = rows.length ? rows[rows.length - 1].xml : null;
 	const templateCells = template ? parseCells(template) : [];
 	const templateRowAttrs = template?.match(/^<row\b([^>]*?)\/?>/)?.[1].replace(/\s*\br="\d+"/, '').replace(/\s*\bspans="[^"]*"/, '') ?? '';
 
-	// 4. Apply each dirty ID.
 	const result: PatchResult = { updated: 0, added: 0, removed: 0 };
 	const toRemove = new Set<number>();
 	const appended: Customer[] = [];
@@ -289,7 +253,6 @@ export async function patchDataSheet(
 			appended.push(rec);
 			continue;
 		}
-		// Update in place: replace the app's columns, keep every other cell in the row as it was.
 		const rowNum = at + 2;
 		const old = rows[at].xml;
 		const openTag = old.match(/^<row\b[^>]*?\/?>/)![0].replace(/\/>$/, '>');
@@ -307,7 +270,6 @@ export async function patchDataSheet(
 		result.updated++;
 	}
 
-	// 5. Remove deleted rows, then renumber everything below the first removed row.
 	let kept = rows;
 	if (toRemove.size) {
 		const first = Math.min(...toRemove);
@@ -316,7 +278,6 @@ export async function patchDataSheet(
 		result.removed = toRemove.size;
 	}
 
-	// 6. Append new customers using the template row's styles.
 	const allCols = Object.values(colOf).map(colNumber);
 	const lastColNum = Math.max(...allCols, ...columns.map((k) => colNumber(colOf[k])));
 	const lastCol = colLetter(lastColNum);
@@ -335,7 +296,6 @@ export async function patchDataSheet(
 		result.added++;
 	}
 
-	// 7. Reassemble the sheet; update its dimension when the row count changed.
 	const lastRow = kept.length + 1;
 	const rangeRef = `A1:${lastCol}${lastRow}`;
 	let newSheet =
@@ -344,7 +304,6 @@ export async function patchDataSheet(
 	if (rowCountChanged) newSheet = newSheet.replace(/<dimension\s+ref="[^"]*"/, `<dimension ref="${rangeRef}"`);
 	zip.file(sheetPath, newSheet);
 
-	// 8. Resize any Excel table on the sheet so structured references see added/removed rows.
 	if (rowCountChanged) {
 		const relsPath = path.posix.join(path.posix.dirname(sheetPath), '_rels', path.posix.basename(sheetPath) + '.rels');
 		const relsFile = zip.file(relsPath);
@@ -366,7 +325,6 @@ export async function patchDataSheet(
 		}
 	}
 
-	// 9. Ask Excel to recalculate on open so the analysis sheets reflect the new data.
 	if (result.updated || rowCountChanged) {
 		let wb = wbXml;
 		if (/<calcPr\b/.test(wb)) {
@@ -374,7 +332,6 @@ export async function patchDataSheet(
 				? wb.replace(/(<calcPr\b[^>]*\bfullCalcOnLoad=")[^"]*"/, '$11"')
 				: wb.replace(/<calcPr\b/, '<calcPr fullCalcOnLoad="1"');
 		} else {
-			// calcPr goes after <definedNames> (or after <sheets> when there are none).
 			const anchor = wb.includes('</definedNames>') ? '</definedNames>' : '</sheets>';
 			wb = wb.replace(anchor, `${anchor}<calcPr fullCalcOnLoad="1"/>`);
 		}

@@ -10,7 +10,6 @@
 	];
 
 	const active = (href: string) => (href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href));
-	// Server-reported status, refreshed by polling while a save is in flight.
 	let polled = $state<typeof data.saveStatus | null>(null);
 	const status = $derived(polled && polled.version >= data.saveStatus.version ? polled : data.saveStatus);
 	const pending = $derived(status.saving || status.version !== status.savedVersion || !!status.lastError);

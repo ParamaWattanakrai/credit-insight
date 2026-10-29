@@ -2,7 +2,6 @@ import { json, error } from '@sveltejs/kit';
 import { listCustomers, createCustomer } from '$lib/server/store';
 import { validateCustomer } from '$lib/schema';
 
-// GET /api/customers?q=&card=&occupation=&gender=&sort=&dir=&page=&pageSize=
 export const GET = async ({ url }) => {
 	const p = url.searchParams;
 	return json(
@@ -19,7 +18,6 @@ export const GET = async ({ url }) => {
 	);
 };
 
-// POST /api/customers  { ...all fields except Customer_ID }
 export const POST = async ({ request }) => {
 	const body = await request.json().catch(() => error(400, 'Body must be JSON'));
 	const { data, errors } = validateCustomer(body);

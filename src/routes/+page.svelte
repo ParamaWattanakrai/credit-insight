@@ -2,7 +2,6 @@
 	import { onMount } from 'svelte';
 	import { env } from '$env/dynamic/public';
 
-	// A saved Tableau view: anything published to Tableau Public, Tableau Cloud or Tableau Server.
 	interface View {
 		name: string;
 		url: string;
@@ -20,7 +19,6 @@
 	let reloadKey = $state(0);
 	let scriptReady = $state(false);
 	let scriptError = $state('');
-	// Connected-App JWT: fetched from our server for views hosted on the configured Tableau site.
 	let token = $state('');
 	let tokenReady = $state(false);
 	let tokenError = $state('');
@@ -28,18 +26,15 @@
 
 	const view = $derived(views[current]);
 
-	/** Accept a share link, a view URL or a pasted embed code, and return a clean view URL. */
 	function normalize(input: string): string | null {
 		let s = input.trim();
 		const fromEmbed = s.match(/src=["']([^"']+)["']/) ?? s.match(/name=["']name["']\s+value=["']([^"']+)["']/);
 		if (fromEmbed) s = fromEmbed[1].replace(/&#47;/g, '/').replace(/&amp;/g, '&');
-		// Tableau Public legacy embed: value='Workbook/Sheet'
 		if (/^[\w-]+\/[\w-]+$/.test(s)) s = `https://public.tableau.com/views/${s}`;
 		try {
 			const u = new URL(s);
 			if (!/^https?:$/.test(u.protocol)) return null;
 			u.hash = '';
-			// keep Tableau server params that matter, drop share/tracking params
 			const keep = new URLSearchParams();
 			for (const [k, v] of u.searchParams) if (!/origin|display_count|language|showVizHome|embed/.test(k)) keep.set(k, v);
 			u.search = keep.toString();
@@ -76,7 +71,6 @@
 		document.head.appendChild(el);
 	}
 
-	/** Ask our server for a fresh JWT when this view lives on the Tableau site the Connected App belongs to. */
 	async function loadToken(url: string) {
 		const seq = ++tokenSeq;
 		tokenReady = false;
@@ -136,7 +130,6 @@
 		if (view) ensureScript(view.url);
 	});
 
-	// A token is single-use, so fetch a new one whenever the view changes or is reloaded.
 	$effect(() => {
 		reloadKey;
 		if (view) loadToken(view.url);

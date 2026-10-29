@@ -1,4 +1,4 @@
-/* Design tokens — light theme only. Chart colours follow a CVD-validated categorical order. */
+
 :root {
 	color-scheme: light;
 	--page: #f6f6f3;
@@ -267,7 +267,7 @@ th.r {
 	font-size: 0.9rem;
 }
 
-/* chart tooltip shared by all SVG charts */
+
 .viz-tip {
 	position: absolute;
 	pointer-events: none;

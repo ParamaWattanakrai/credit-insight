@@ -1,5 +1,3 @@
-// Statistical analysis of the in-memory dataset. Results are cached per data
-// version, so they are recomputed only after a create/update/delete.
 
 import { getStore } from './store';
 import {
@@ -11,7 +9,6 @@ import {
 	type Customer
 } from '$lib/schema';
 
-// ---------------------------------------------------------------- primitives
 
 export interface Summary {
 	key: string;
@@ -30,7 +27,7 @@ export interface Summary {
 
 function quantileSorted(s: Float64Array, p: number) {
 	if (!s.length) return NaN;
-	const pos = (s.length - 1) * p; // same definition as Excel QUARTILE.INC / PERCENTILE.INC
+	const pos = (s.length - 1) * p;
 	const lo = Math.floor(pos);
 	const hi = Math.ceil(pos);
 	return s[lo] + (s[hi] - s[lo]) * (pos - lo);
@@ -54,8 +51,7 @@ function summarize(key: string, a: Float64Array): Summary {
 		m2 += d * d;
 		m3 += d * d * d;
 	}
-	const sd = Math.sqrt(m2 / (n - 1)); // sample SD = Excel STDEV.S
-	// adjusted Fisher-Pearson skewness = Excel SKEW
+	const sd = Math.sqrt(m2 / (n - 1));
 	const skew = n > 2 && sd > 0 ? (n / ((n - 1) * (n - 2))) * (m3 / Math.pow(sd, 3)) : 0;
 	const s = Float64Array.from(a).sort();
 	return {
@@ -97,7 +93,6 @@ function pearson(x: Float64Array, y: Float64Array) {
 	return sxx && syy ? sxy / Math.sqrt(sxx * syy) : 0;
 }
 
-// --- p-values: regularized incomplete gamma / beta (Numerical Recipes style)
 
 function lgamma(x: number): number {
 	const c = [76.18009172947146, -86.50532032941677, 24.01409824083091, -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5];
@@ -109,7 +104,6 @@ function lgamma(x: number): number {
 }
 
 function gammaQ(a: number, x: number): number {
-	// upper regularized gamma Q(a, x) = 1 - P(a, x)
 	if (x <= 0) return 1;
 	if (x < a + 1) {
 		let sum = 1 / a,
@@ -182,7 +176,6 @@ function betaI(a: number, b: number, x: number) {
 const fPValue = (f: number, d1: number, d2: number) => betaI(d2 / 2, d1 / 2, d2 / (d2 + d1 * f));
 const chi2PValue = (x: number, df: number) => gammaQ(df / 2, x / 2);
 
-// ---------------------------------------------------------------- analyses
 
 export interface GroupRow {
 	group: string;
@@ -221,7 +214,6 @@ export function ageBand(age: number) {
 	return '65+';
 }
 
-// FICO-style bands
 export const SCORE_BANDS = ['Poor (<580)', 'Fair (580–669)', 'Good (670–739)', 'Very good (740–799)', 'Excellent (800+)'];
 export function scoreBand(s: number) {
 	if (s < 580) return SCORE_BANDS[0];
@@ -332,14 +324,12 @@ function histogram(a: Float64Array, bins: number, clipQuantile = 0.995) {
 	return { bins: counts.map((c, i) => ({ x0: lo + i * width, x1: lo + (i + 1) * width, count: c })), clipped, clipAt: hi };
 }
 
-// deterministic sample for scatter plots (stable between reloads)
 function sample<T>(arr: T[], n: number) {
 	if (arr.length <= n) return arr;
 	const step = arr.length / n;
 	return Array.from({ length: n }, (_, i) => arr[Math.floor(i * step)]);
 }
 
-// ---------------------------------------------------------------- public API
 
 const CORR_KEYS = [
 	'Credit_Score',
@@ -404,7 +394,6 @@ async function compute(rows: Customer[]) {
 	const byGender = groupBy(rows, (r) => String(r.Gender), ['M', 'F'], GROUP_METRICS);
 	const byScoreBand = groupBy(rows, (r) => scoreBand(Number(r.Credit_Score)), SCORE_BANDS, GROUP_METRICS);
 
-	// spending mix overall and per card tier (share of the 7 categories)
 	const mixOverall = SPENDING_CATEGORIES.map((k) => ({ key: k, label: COLUMN_MAP[k].label, mean: sumMap[k].mean }));
 	const mixTotal = mixOverall.reduce((a, b) => a + b.mean, 0);
 	const mixByCard = groupBy(rows, (r) => String(r.Card_Type), CARD_TYPES, SPENDING_CATEGORIES).map((g) => {
@@ -455,7 +444,6 @@ async function compute(rows: Customer[]) {
 		highRiskShare: highRisk / n
 	};
 
-	// plain-language findings generated from the numbers
 	const topCorr = scoreCorrelations[0];
 	const topCard = [...byCard].sort((a, b) => b.means.Monthly_Spending - a.means.Monthly_Spending)[0];
 	const lowCard = [...byCard].sort((a, b) => a.means.Monthly_Spending - b.means.Monthly_Spending)[0];

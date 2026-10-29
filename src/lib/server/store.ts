@@ -1,21 +1,3 @@
-// Excel-backed data store.
-//
-// The .xlsx file IS the database. Reading/writing 50k rows per request would be far
-// too slow, so the store works like this:
-//
-//   1. On first use, the data sheet is read into memory once (plain JS objects).
-//   2. Reads (list / get / stats) are served from memory.
-//   3. Every create/update/delete mutates memory, records the customer ID as changed,
-//      then schedules a save. Saves are debounced and serialized — only one write runs
-//      at a time, and a burst of edits produces a single write.
-//   4. A save patches ONLY the changed rows of the data sheet (see xlsx-patch.ts).
-//      Other sheets, charts, tables, formulas and formatting in the workbook are kept.
-//      The result goes to a temp file which is renamed over the original
-//      (atomic: the xlsx is never half-written).
-//   5. If the xlsx is edited outside the app (e.g. opened and saved in Excel), the
-//      store notices the newer modification time and reloads it.
-//
-// This is safe for a single server process (`docker compose up`, `npm run dev` or `node build`).
 
 import { patchDataSheet, readDataSheet } from './xlsx-patch';
 import fs from 'node:fs';
@@ -61,10 +43,8 @@ let savePromise: Promise<void> | null = null;
 let lastSavedAt: string | null = null;
 let lastError: string | null = null;
 let backedUpThisRun = false;
-/** Customer IDs created, updated or deleted since the last successful save. */
 let dirty = new Set<string>();
 
-// ---------------------------------------------------------------- loading
 
 async function ensureDataFile() {
 	if (fs.existsSync(DATA_FILE)) return;
@@ -94,11 +74,9 @@ async function load(): Promise<State> {
 	return { rows, index, nextId: maxId + 1, version, loadedMtimeMs: mtimeMs };
 }
 
-/** Get the in-memory dataset, loading (or reloading after external edits) as needed. */
 export async function getStore(): Promise<State> {
 	if (loading) return loading;
 	if (state) {
-		// Reload if someone edited the xlsx outside the app — but never discard unsaved edits.
 		const clean = !saving && savedVersion === state.version;
 		if (clean) {
 			try {
@@ -127,7 +105,6 @@ export async function getStore(): Promise<State> {
 	return loading;
 }
 
-// ---------------------------------------------------------------- saving
 
 async function backupOnce() {
 	if (backedUpThisRun || !fs.existsSync(DATA_FILE)) return;
@@ -157,13 +134,13 @@ async function saveNow(): Promise<void> {
 					const i = s.index.get(id);
 					return i === undefined ? undefined : s.rows[i];
 				});
-				await fsp.rename(tmp, DATA_FILE); // atomic replace
+				await fsp.rename(tmp, DATA_FILE);
 				s.loadedMtimeMs = (await fsp.stat(DATA_FILE)).mtimeMs;
 				console.log(
 					`[store] saved to Excel in ${Date.now() - t0} ms (v${target}): ${r.updated} updated, ${r.added} added, ${r.removed} removed`
 				);
 			} catch (err) {
-				for (const id of ids) dirty.add(id); // keep them for the retry
+				for (const id of ids) dirty.add(id);
 				throw err;
 			}
 			savedVersion = target;
@@ -173,7 +150,6 @@ async function saveNow(): Promise<void> {
 	} catch (err) {
 		lastError = err instanceof Error ? err.message : String(err);
 		console.error('[store] save failed — will retry:', lastError);
-		// Typical cause on Windows: the file is open in Excel. Retry later.
 		setTimeout(scheduleSave, 3000);
 	} finally {
 		saving = false;
@@ -185,7 +161,6 @@ function scheduleSave() {
 	saveTimer = setTimeout(() => {
 		saveTimer = null;
 		if (saving) {
-			// another save is running; it loops until versions match, but re-arm just in case
 			savePromise?.then(scheduleSave);
 			return;
 		}
@@ -193,7 +168,6 @@ function scheduleSave() {
 	}, SAVE_DEBOUNCE_MS);
 }
 
-/** Flush pending edits to disk (used on shutdown and before downloads). */
 export async function flush() {
 	if (saveTimer) {
 		clearTimeout(saveTimer);
@@ -230,7 +204,6 @@ function touch(s: State, id: string) {
 	scheduleSave();
 }
 
-// ---------------------------------------------------------------- CRUD
 
 export interface ListQuery {
 	q?: string;
@@ -254,13 +227,11 @@ export async function listCustomers(query: ListQuery) {
 			(!q || String(r.Customer_ID).toLowerCase().includes(q) || String(r.Occupation).toLowerCase().includes(q))
 	);
 
-	// Newest records first by default, so freshly added customers are visible.
 	const sort = query.sort && COLUMN_MAP[query.sort] ? query.sort : null;
 	const dir = query.dir === 'asc' ? 1 : -1;
 	if (sort) {
 		const col = COLUMN_MAP[sort];
 		const numeric = col.type === 'int' || col.type === 'float';
-		// Enum columns (e.g. Card_Type) sort by their defined tier/rank order, not alphabetically.
 		const rank = col.type === 'enum' && col.options ? (v: unknown) => col.options!.indexOf(String(v)) : null;
 		rows = rows.slice().sort((a, b) =>
 			numeric
