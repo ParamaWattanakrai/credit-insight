@@ -3,18 +3,21 @@
 // The .xlsx file IS the database. Reading/writing 50k rows per request would be far
 // too slow, so the store works like this:
 //
-//   1. On first use, the workbook is streamed into memory once (plain JS objects).
+//   1. On first use, the data sheet is read into memory once (plain JS objects).
 //   2. Reads (list / get / stats) are served from memory.
-//   3. Every create/update/delete mutates memory, then schedules a save.
-//      Saves are debounced and serialized — only one write runs at a time, and a
-//      burst of edits produces a single write. Rows are streamed to a temp file
-//      which is then renamed over the original (atomic: the xlsx is never half-written).
-//   4. If the xlsx is edited outside the app (e.g. opened and saved in Excel), the
+//   3. Every create/update/delete mutates memory, records the customer ID as changed,
+//      then schedules a save. Saves are debounced and serialized — only one write runs
+//      at a time, and a burst of edits produces a single write.
+//   4. A save patches ONLY the changed rows of the data sheet (see xlsx-patch.ts).
+//      Other sheets, charts, tables, formulas and formatting in the workbook are kept.
+//      The result goes to a temp file which is renamed over the original
+//      (atomic: the xlsx is never half-written).
+//   5. If the xlsx is edited outside the app (e.g. opened and saved in Excel), the
 //      store notices the newer modification time and reloads it.
 //
 // This is safe for a single server process (`docker compose up`, `npm run dev` or `node build`).
 
-import ExcelJS from 'exceljs';
+import { patchDataSheet, readDataSheet } from './xlsx-patch';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -24,7 +27,6 @@ import { EXCEL_ORDER, COLUMN_MAP, type Customer } from '$lib/schema';
 const DATA_FILE = path.resolve(env.DATA_FILE || 'data/credit_card_customers.xlsx');
 const SEED_FILE = path.resolve(env.SEED_FILE || 'data/seed/credit_card_customers_seed.xlsx');
 const BACKUP_DIR = path.join(path.dirname(DATA_FILE), 'backups');
-const SHEET_NAME = 'Customers';
 const SAVE_DEBOUNCE_MS = 400;
 const MAX_BACKUPS = 5;
 
@@ -59,45 +61,10 @@ let savePromise: Promise<void> | null = null;
 let lastSavedAt: string | null = null;
 let lastError: string | null = null;
 let backedUpThisRun = false;
+/** Customer IDs created, updated or deleted since the last successful save. */
+let dirty = new Set<string>();
 
 // ---------------------------------------------------------------- loading
-
-async function readWorkbook(file: string): Promise<Customer[]> {
-	const reader = new ExcelJS.stream.xlsx.WorkbookReader(file, {
-		sharedStrings: 'cache',
-		worksheets: 'emit',
-		hyperlinks: 'ignore',
-		styles: 'ignore',
-		entries: 'emit'
-	});
-	const rows: Customer[] = [];
-	let header: string[] | null = null;
-
-	for await (const sheet of reader) {
-		for await (const row of sheet) {
-			const values = row.values as unknown[];
-			if (!header) {
-				header = values.slice(1).map((v) => String(v ?? '').trim());
-				const missing = EXCEL_ORDER.filter((k) => !header!.includes(k));
-				if (missing.length) throw new Error(`Excel file is missing columns: ${missing.join(', ')}`);
-				continue;
-			}
-			const rec: Customer = {};
-			for (let i = 0; i < header.length; i++) {
-				const key = header[i];
-				if (!COLUMN_MAP[key]) continue;
-				let v = values[i + 1] as unknown;
-				if (v && typeof v === 'object' && 'result' in (v as object)) v = (v as { result: unknown }).result; // formula cell
-				const col = COLUMN_MAP[key];
-				if (col.type === 'id' || col.type === 'enum') rec[key] = String(v ?? '').trim();
-				else rec[key] = v === null || v === undefined || v === '' ? 0 : Number(v);
-			}
-			if (rec.Customer_ID) rows.push(rec);
-		}
-		break; // first worksheet only
-	}
-	return rows;
-}
 
 async function ensureDataFile() {
 	if (fs.existsSync(DATA_FILE)) return;
@@ -111,7 +78,7 @@ async function load(): Promise<State> {
 	await ensureDataFile();
 	const t0 = Date.now();
 	const mtimeMs = (await fsp.stat(DATA_FILE)).mtimeMs;
-	const rows = await readWorkbook(DATA_FILE);
+	const rows = await readDataSheet(DATA_FILE, EXCEL_ORDER);
 	const index = new Map<string, number>();
 	let maxId = 100000 - 1;
 	rows.forEach((r, i) => {
@@ -122,6 +89,7 @@ async function load(): Promise<State> {
 	});
 	const version = (state?.version ?? 0) + 1;
 	savedVersion = version;
+	dirty = new Set();
 	console.log(`[store] loaded ${rows.length} rows from ${path.basename(DATA_FILE)} in ${Date.now() - t0} ms`);
 	return { rows, index, nextId: maxId + 1, version, loadedMtimeMs: mtimeMs };
 }
@@ -171,20 +139,6 @@ async function backupOnce() {
 	for (const f of files.slice(0, Math.max(0, files.length - MAX_BACKUPS))) await fsp.unlink(path.join(BACKUP_DIR, f));
 }
 
-export async function writeWorkbook(rows: Customer[], file: string) {
-	// No styles / shared strings: keeps the write fast. Header row is frozen for readability in Excel.
-	const writer = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: file, useStyles: false, useSharedStrings: false });
-	const ws = writer.addWorksheet(SHEET_NAME, { views: [{ state: 'frozen', ySplit: 1 }] });
-	ws.columns = EXCEL_ORDER.map((key) => ({ header: key, key, width: Math.max(12, key.length + 2) }));
-	ws.getRow(1).commit();
-	for (let i = 0; i < rows.length; i++) {
-		ws.addRow(EXCEL_ORDER.map((k) => rows[i][k] ?? null)).commit();
-		// yield to the event loop regularly so the site stays responsive during a save
-		if (i % 2000 === 1999) await new Promise((r) => setImmediate(r));
-	}
-	ws.commit();
-	await writer.commit();
-}
 
 async function saveNow(): Promise<void> {
 	if (!state) return;
@@ -192,17 +146,29 @@ async function saveNow(): Promise<void> {
 	try {
 		while (state && savedVersion !== state.version) {
 			const target = state.version;
-			const snapshot = state.rows.slice();
-			await backupOnce();
-			const tmp = `${DATA_FILE}.${process.pid}.tmp`;
-			const t0 = Date.now();
-			await writeWorkbook(snapshot, tmp);
-			await fsp.rename(tmp, DATA_FILE); // atomic replace
-			state.loadedMtimeMs = (await fsp.stat(DATA_FILE)).mtimeMs;
+			const ids = dirty;
+			dirty = new Set();
+			const s = state;
+			try {
+				await backupOnce();
+				const tmp = `${DATA_FILE}.${process.pid}.tmp`;
+				const t0 = Date.now();
+				const r = await patchDataSheet(DATA_FILE, tmp, EXCEL_ORDER, ids, (id) => {
+					const i = s.index.get(id);
+					return i === undefined ? undefined : s.rows[i];
+				});
+				await fsp.rename(tmp, DATA_FILE); // atomic replace
+				s.loadedMtimeMs = (await fsp.stat(DATA_FILE)).mtimeMs;
+				console.log(
+					`[store] saved to Excel in ${Date.now() - t0} ms (v${target}): ${r.updated} updated, ${r.added} added, ${r.removed} removed`
+				);
+			} catch (err) {
+				for (const id of ids) dirty.add(id); // keep them for the retry
+				throw err;
+			}
 			savedVersion = target;
 			lastSavedAt = new Date().toISOString();
 			lastError = null;
-			console.log(`[store] saved ${snapshot.length} rows to Excel in ${Date.now() - t0} ms (v${target})`);
 		}
 	} catch (err) {
 		lastError = err instanceof Error ? err.message : String(err);
@@ -258,7 +224,8 @@ export function dataFilePath() {
 	return DATA_FILE;
 }
 
-function touch(s: State) {
+function touch(s: State, id: string) {
+	dirty.add(id);
 	s.version++;
 	scheduleSave();
 }
@@ -326,7 +293,7 @@ export async function createCustomer(data: Customer) {
 	for (const k of EXCEL_ORDER) if (k !== 'Customer_ID') rec[k] = data[k];
 	s.rows.push(rec);
 	s.index.set(id, s.rows.length - 1);
-	touch(s);
+	touch(s, id);
 	return rec;
 }
 
@@ -336,7 +303,7 @@ export async function updateCustomer(id: string, data: Customer) {
 	if (i === undefined) return null;
 	const rec = { ...s.rows[i], ...data, Customer_ID: id };
 	s.rows[i] = rec;
-	touch(s);
+	touch(s, id);
 	return rec;
 }
 
@@ -347,6 +314,6 @@ export async function deleteCustomer(id: string) {
 	s.rows.splice(i, 1);
 	s.index.delete(id);
 	for (let j = i; j < s.rows.length; j++) s.index.set(String(s.rows[j].Customer_ID), j);
-	touch(s);
+	touch(s, id);
 	return true;
 }

@@ -95,18 +95,24 @@ Notes
 
 Reading or rewriting a 10 MB, 50k-row workbook on every request would take seconds, and two simultaneous writes could corrupt it. So `src/lib/server/store.ts`:
 
-1. **Loads once.** The workbook is streamed into memory on server start (ExcelJS streaming reader).
+1. **Loads once.** The first worksheet (the customer data, with a header row) is read into memory on server start.
 2. **Serves reads from memory.** Listing, searching, sorting and statistics never touch the disk.
-3. **Writes safely.** Every create/update/delete changes memory, then schedules a save. Saves are
+3. **Writes only what changed.** Every create/update/delete changes memory and records the customer ID; a save then patches just those rows of the first worksheet (`src/lib/server/xlsx-patch.ts`):
+   - edited rows are rewritten in place (cell styles kept), new customers are appended, deleted ones removed and the rows below moved up;
+   - **everything else in the workbook is left as it is**: your own analysis sheets, charts, formulas, formatting, and extra columns you add to the data sheet;
+   - if the data is an Excel table (e.g. `CustomerData`), the table is resized, so formulas like `COUNTIFS(CustomerData[Age], …)` include new rows;
+   - the workbook is flagged to recalculate when opened. Excel does this automatically; in LibreOffice press **Ctrl+Shift+F9**, or set *Tools → Options → LibreOffice Calc → Formula → Recalculation on file load* to *Always*.
+4. **Writes safely.** Saves are
    - *debounced*: a burst of edits becomes one write,
    - *serialized*: only one write at a time, so no lost updates or corruption,
-   - *atomic*: rows go to a temp file which is then renamed over the original, so the xlsx is never half-written,
-   - *non-blocking*: the writer yields regularly so the site stays responsive during the ~2–3 s write.
-4. **Backs up.** Before the first save of each run, the previous file is copied to `data/backups/` (last 5 kept).
-5. **Notices outside edits.** If you open the xlsx in Excel, change it and save while the app is running, the app reloads it on the next request (unsaved in-app edits are never discarded).
-6. **Flushes on shutdown** (Ctrl+C) so pending edits reach the file.
+   - *atomic*: the result goes to a temp file which is then renamed over the original, so the xlsx is never half-written.
+5. **Backs up.** Before the first save of each run, the previous file is copied to `data/backups/` (last 5 kept).
+6. **Notices outside edits.** If you open the xlsx in Excel, change it and save while the app is running, the app reloads it on the next request (unsaved in-app edits are never discarded).
+7. **Flushes on shutdown** (Ctrl+C) so pending edits reach the file.
 
 The status in the top-right corner shows *Saving to Excel…* while a write is in progress.
+
+Keep your analysis on sheets *after* the data sheet: the app always treats the **first** sheet as the customer data.
 
 Limitations, by design for a class project: one server process only (don't run several instances against the same file), and on Windows close the file in Excel before editing in the app (Excel locks it; the app retries the save every 3 s and shows *Save failed — retrying*).
 
@@ -181,4 +187,4 @@ credit-insight/
 
 ## Tech
 
-SvelteKit 2 · Svelte 5 · TypeScript · ExcelJS · adapter-node · Tableau Embedding API v3. Light theme only.
+SvelteKit 2 · Svelte 5 · TypeScript · JSZip (row-level xlsx patching) · ExcelJS (Excel report export) · adapter-node · Tableau Embedding API v3. Light theme only.
